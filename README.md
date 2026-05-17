@@ -73,3 +73,7 @@ Notes
 - Deletion is permanent (not Recycle Bin). Confirm carefully.
 - Large folders take time when using Content (hash) mode.
 - Use Stop to cancel a long scan.
+
+License
+-------
+This project is licensed under the [MIT License](LICENSE).
