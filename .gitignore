@@ -1,0 +1,26 @@
+# Python bytecode / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# PyInstaller output (rebuilt by build.bat)
+build/
+dist/
+
+# Auto-generated spec (build.bat uses CLI flags; optional to keep locally)
+*.spec
+
+# Local app settings (template at repo root may be committed; copies in dist are not)
+dist/duplicate_finder_settings.json
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/

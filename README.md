@@ -1,6 +1,8 @@
 Duplicate File Finder
 =====================
 
+![Duplicate File Finder](Preview.png)
+
 Quick start
 -----------
 1. Double-click run.bat  (or: python duplicate_finder.py)
@@ -14,6 +16,9 @@ Build .exe (Windows)
 2. Output: dist\Duplicate File Finder.exe
 3. You can copy the .exe anywhere; settings save as duplicate_finder_settings.json
    in the same folder as the .exe
+4. After a successful build you are prompted (5 second timeout, default No) to:
+   - refresh `Preview.png` (`scripts/capture_preview.py`)
+   - rebuild `dist\DuplicateFileFinder-Setup.exe` (requires [Inno Setup 6](https://jrsoftware.org/isdl.php))
 
 Scan modes
 ----------
@@ -21,11 +26,20 @@ Scan modes
 - Exact file name — same filename in different folders
 - Name + size     — same name and same size
 - Similar name    — same song/video after normalizing messy titles (quotes,
-                    feat./&, 720p, "Official Music Video", parentheses, etc.)
+                    feat./prod., commas, dashes, &, 720p, "Official Music Video",
+                    parentheses, etc.)
 - Size            — same file size (may be different names; review before delete)
 
 Each duplicate group appears in its own labeled list (scroll down to see all groups).
 Each list shows checkboxes, file name, size, folder, and full path.
+
+Right-click a row in the results list for:
+
+- Check / Uncheck
+- Reveal in file browser
+- Open (default app)
+- Remove from this list — hides the row without deleting the file on disk
+- Delete — same as Delete checked for that file
 
 Filters
 -------
@@ -71,6 +85,7 @@ Saved settings
 Notes
 -----
 - Deletion is permanent (not Recycle Bin). Confirm carefully.
+- “Remove from this list” only updates the on-screen results; it does not delete files.
 - Large folders take time when using Content (hash) mode.
 - Use Stop to cancel a long scan.
 

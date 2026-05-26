@@ -1,6 +1,6 @@
 [Setup]
 AppName=Duplicate File Finder
-AppVersion=1.0
+AppVersion=1.1
 AppPublisher=mPhpMaster
 AppPublisherURL=https://github.com/mPhpMaster/duplicate-finder-app
 AppSupportURL=https://github.com/mPhpMaster/duplicate-finder-app
@@ -26,8 +26,6 @@ Source: "dist\Duplicate File Finder.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\Duplicate File Finder.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "duplicate_finder_settings.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
-Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "run.bat"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Duplicate File Finder"; Filename: "{app}\Duplicate File Finder.exe"

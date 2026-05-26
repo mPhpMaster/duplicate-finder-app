@@ -7,6 +7,8 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import threading
 import tkinter as tk
@@ -65,6 +67,12 @@ _RE_RESOLUTION = re.compile(r"\d{3,4}p", re.IGNORECASE)
 _RE_QUALITY = re.compile(r"(?<![a-z0-9])(?:4k|8k|uhd|hd)(?![a-z0-9])", re.IGNORECASE)
 # feat / ft / featuring → single token
 _RE_FEAT = re.compile(r"\b(?:feat\.?|ft\.?|featuring)\b", re.IGNORECASE)
+# prod / produced by → single token (often in parentheses)
+_RE_PROD = re.compile(r"\b(?:prod\.?|produced\s+by)\b", re.IGNORECASE)
+_RE_PROD_PAREN = re.compile(
+    r"[\(\[]\s*(?:prod\.?|produced\s+by)\s+([^)\]]*)[\)\]]",
+    re.IGNORECASE,
+)
 # Common video/music filename clutter (order: longer phrases first).
 _RE_JUNK_PHRASES = re.compile(
     r"\b(?:official\s+music\s+video|official\s+video|music\s+video|"
@@ -81,6 +89,8 @@ def normalize_media_filename(name: str) -> str:
     Turns variants like:
       MC TYSON Make It Rain feat eyden Watson Official Music Video720p.mp4
       MC TYSON " Make It Rain " feat. eyden & Watson (Official Music Video).mp4
+      Awich GILA GILA feat JP THE WAVY YZERR Prod Chaki Zulu720p.mp4
+      Awich - GILA GILA feat. JP THE WAVY, YZERR (Prod. Chaki Zulu).mp4
     into the same normalized string so they can be grouped as duplicates.
     """
     stem = Path(name).stem
@@ -91,8 +101,12 @@ def normalize_media_filename(name: str) -> str:
     s = _RE_RESOLUTION.sub(" ", s)
     s = _RE_QUALITY.sub(" ", s)
     s = _RE_FEAT.sub(" feat ", s)
+    # Keep producer credits when they only appear in (Prod. …) / [Prod. …]
+    s = _RE_PROD_PAREN.sub(r" prod \1 ", s)
+    s = _RE_PROD.sub(" prod ", s)
     s = re.sub(r"\s*&\s*", " ", s)
     s = re.sub(r"\s*\+\s*", " ", s)
+    s = re.sub(r",\s*", " ", s)
     # Parenthetical / bracket metadata: (Official MV), [HD], etc.
     s = re.sub(r"\([^)]*\)", " ", s)
     s = re.sub(r"\[[^\]]*\]", " ", s)
@@ -162,6 +176,95 @@ def human_size(n: int) -> str:
     return f"{n:.1f} TB"
 
 
+def reveal_path_in_file_manager(path: Path) -> str | None:
+    """Reveal a file in the system file manager. None = success, else error text."""
+    try:
+        resolved = path.resolve()
+    except OSError:
+        resolved = path
+    if not resolved.is_file():
+        return f"File not found:\n{resolved}"
+
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["explorer", "/select,", os.fsdecode(resolved)],
+                check=False,
+            )
+            return None
+        except OSError as exc:
+            return str(exc)
+
+    if sys.platform == "darwin":
+        try:
+            subprocess.run(["open", "-R", resolved], check=False)
+            return None
+        except OSError as exc:
+            return str(exc)
+
+    uri = resolved.as_uri()
+    if shutil.which("dbus-send"):
+        try:
+            result = subprocess.run(
+                [
+                    "dbus-send",
+                    "--session",
+                    "--print-reply",
+                    "--dest=org.freedesktop.FileManager1",
+                    "/org/freedesktop/FileManager1",
+                    "org.freedesktop.FileManager1.ShowItems",
+                    f"array:string:{uri}",
+                    "string:",
+                ],
+                capture_output=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                return None
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    path_str = os.fsdecode(resolved)
+    for argv in (
+        ["nautilus", "--select", path_str],
+        ["nemo", "--select", path_str],
+        ["dolphin", "--select", path_str],
+    ):
+        if shutil.which(argv[0]):
+            try:
+                subprocess.run(argv, check=False, timeout=10)
+                return None
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+
+    parent = os.fsdecode(resolved.parent)
+    if shutil.which("xdg-open"):
+        try:
+            subprocess.run(["xdg-open", parent], check=False, timeout=10)
+            return None
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return str(exc)
+    return "No file manager found (install xdg-utils or a desktop file manager)."
+
+
+def open_path_with_default_app(path: Path) -> str | None:
+    """Open a file with the OS default application. None = success, else error text."""
+    if not path.is_file():
+        return f"File not found:\n{path}"
+    try:
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", path], check=False)
+        else:
+            if not shutil.which("xdg-open"):
+                return "xdg-open not found (install xdg-utils)."
+            subprocess.run(["xdg-open", path], check=False)
+        return None
+    except OSError as exc:
+        return str(exc)
+
+
 def load_app_settings() -> dict:
     if not _SETTINGS_FILE.is_file():
         return {}
@@ -219,6 +322,7 @@ class DuplicateFinderApp(tk.Tk):
         self._check_dir_subfolders_var = tk.BooleanVar(value=True)
         self._checked: set[str] = set()
         self._group_trees: list[ttk.Treeview] = []
+        self._context_menu_iids: list[str] = []
         self._save_after_id: str | None = None
 
         self._ui_font = pick_unicode_font(self, 10)
@@ -739,6 +843,7 @@ class DuplicateFinderApp(tk.Tk):
         vsb.grid(row=0, column=1, sticky=tk.NS)
         tree_frame.columnconfigure(0, weight=1)
         tree.bind("<Button-1>", self._on_tree_click, add=True)
+        tree.bind("<Button-3>", self._on_tree_right_click)
         tree.bind("<space>", self._on_tree_space)
         self._bind_tree_wheel(tree, tree_frame)
         tree.tag_configure("dup", foreground="#b00020")
@@ -790,6 +895,106 @@ class DuplicateFinderApp(tk.Tk):
             return
         for iid in tree.selection():
             self._toggle_checked(iid)
+
+    def _on_tree_right_click(self, event: tk.Event) -> str | None:
+        tree = event.widget
+        if not isinstance(tree, ttk.Treeview):
+            return None
+        if tree.identify_region(event.x, event.y) != "cell":
+            return None
+        row = tree.identify_row(event.y)
+        if not row:
+            return None
+        if row not in tree.selection():
+            tree.selection_set(row)
+        self._show_file_context_menu(tree, event)
+        return "break"
+
+    def _context_target_iids(self, tree: ttk.Treeview) -> list[str]:
+        sel = list(tree.selection())
+        return sel if sel else list(self._context_menu_iids)
+
+    def _show_file_context_menu(self, tree: ttk.Treeview, event: tk.Event) -> None:
+        iids = self._context_target_iids(tree)
+        if not iids:
+            return
+        self._context_menu_iids = iids
+        paths = [Path(os.fsdecode(iid)) for iid in iids if self._iid_exists(iid)]
+        if not paths:
+            return
+
+        all_checked = all(iid in self._checked for iid in iids)
+        all_unchecked = all(iid not in self._checked for iid in iids)
+        if all_checked:
+            check_label = "Uncheck"
+        elif all_unchecked:
+            check_label = "Check"
+        else:
+            check_label = "Check/Uncheck"
+
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(
+            label=check_label,
+            command=lambda: self._context_toggle_check(iids),
+        )
+        menu.add_separator()
+        menu.add_command(
+            label="Reveal in file browser",
+            command=lambda: self._reveal_in_file_browser(paths[0]),
+        )
+        menu.add_command(label="Open", command=lambda: self._open_paths(paths))
+        menu.add_separator()
+        menu.add_command(
+            label="Remove from this list",
+            command=lambda: self._remove_paths_from_list(paths),
+        )
+        menu.add_command(
+            label="Delete",
+            command=lambda: self._delete_paths(paths),
+        )
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _context_toggle_check(self, iids: list[str]) -> None:
+        if all(iid in self._checked for iid in iids):
+            for iid in iids:
+                self._set_checked(iid, False)
+        else:
+            for iid in iids:
+                self._set_checked(iid, True)
+        self._update_check_status()
+
+    def _reveal_in_file_browser(self, path: Path) -> None:
+        err = reveal_path_in_file_manager(path)
+        if err:
+            messagebox.showerror("Reveal", err)
+
+    def _open_paths(self, paths: list[Path]) -> None:
+        errors: list[str] = []
+        for path in paths:
+            err = open_path_with_default_app(path)
+            if err:
+                errors.append(err)
+        if errors:
+            messagebox.showerror(
+                "Open",
+                "Could not open:\n" + "\n".join(errors[:6]),
+            )
+
+    def _remove_paths_from_list(self, paths: list[Path]) -> None:
+        if not paths:
+            return
+        for p in paths:
+            self._checked.discard(os.fsdecode(p))
+        self._remove_deleted_from_groups(paths)
+        self._refresh_tree()
+        n = len(paths)
+        self._status_var.set(
+            f"Removed {n} file(s) from the list (not deleted from disk). "
+            f"Groups remaining: {len(self._filtered_groups)}."
+        )
 
     def _tree_iids(self) -> list[str]:
         iids: list[str] = []
