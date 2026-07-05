@@ -77,7 +77,7 @@ _RE_PROD_PAREN = re.compile(
 _RE_JUNK_PHRASES = re.compile(
     r"\b(?:official\s+music\s+video|official\s+video|music\s+video|"
     r"official\s+audio|lyric\s+video|full\s+video|hd\s+video|"
-    r"official|lyrics?|audio|video|omv|mv|hd|uhd)\b",
+    r"official|lyrics?|audio|video|omv|mv|hd|uhd|youtube)\b",
     re.IGNORECASE,
 )
 

@@ -1,6 +1,6 @@
 [Setup]
 AppName=Duplicate File Finder
-AppVersion=1.1
+AppVersion=1.2
 AppPublisher=mPhpMaster
 AppPublisherURL=https://github.com/mPhpMaster/duplicate-finder-app
 AppSupportURL=https://github.com/mPhpMaster/duplicate-finder-app

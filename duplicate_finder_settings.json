@@ -1,1 +1,11 @@
-{}
+{
+  "folder_path": "D:/Music",
+  "recursive": true,
+  "scan_mode": "name_similar",
+  "filter_ext": "",
+  "filter_name": "",
+  "filter_min_mb": "",
+  "check_dir": "D:/Music",
+  "check_dir_subfolders": true,
+  "geometry": "1920x1009+234+234"
+}
