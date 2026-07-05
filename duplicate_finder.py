@@ -92,6 +92,10 @@ def normalize_media_filename(name: str) -> str:
       Awich GILA GILA feat JP THE WAVY YZERR Prod Chaki Zulu720p.mp4
       Awich - GILA GILA feat. JP THE WAVY, YZERR (Prod. Chaki Zulu).mp4
     into the same normalized string so they can be grouped as duplicates.
+
+    The key is space- and punctuation-insensitive: all whitespace is removed
+    at the end, so "Lil $o$o" (punctuation spaced) and "Lil oo" (punctuation
+    deleted by a download sanitizer) produce the same key.
     """
     stem = Path(name).stem
     s = unicodedata.normalize("NFKC", stem)
@@ -113,7 +117,7 @@ def normalize_media_filename(name: str) -> str:
     s = _RE_JUNK_PHRASES.sub(" ", s)
     # Remaining punctuation → spaces (keep letters/numbers across scripts)
     s = re.sub(r"[^\w\s]", " ", s, flags=re.UNICODE)
-    s = re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"\s+", "", s)
     return s
 
 
