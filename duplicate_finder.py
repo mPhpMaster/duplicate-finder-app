@@ -96,6 +96,10 @@ def normalize_media_filename(name: str) -> str:
     The key is space- and punctuation-insensitive: all whitespace is removed
     at the end, so "Lil $o$o" (punctuation spaced) and "Lil oo" (punctuation
     deleted by a download sanitizer) produce the same key.
+
+    Trailing words that repeat the leading words are dropped, so a
+    downloader-appended artist suffix ("Artist - Title ... - Artist") does
+    not prevent matching the plain "Artist - Title ..." variant.
     """
     stem = Path(name).stem
     s = unicodedata.normalize("NFKC", stem)
@@ -117,8 +121,15 @@ def normalize_media_filename(name: str) -> str:
     s = _RE_JUNK_PHRASES.sub(" ", s)
     # Remaining punctuation → spaces (keep letters/numbers across scripts)
     s = re.sub(r"[^\w\s]", " ", s, flags=re.UNICODE)
-    s = re.sub(r"\s+", "", s)
-    return s
+    s = re.sub(r"\s+", " ", s).strip()
+    # Downloaders often re-append the artist/channel: "Artist - Title ... - Artist".
+    # Drop trailing words that exactly repeat the leading words.
+    tokens = s.split(" ")
+    for k in range(len(tokens) // 2, 0, -1):
+        if tokens[:k] == tokens[-k:]:
+            tokens = tokens[:-k]
+            break
+    return "".join(tokens)
 
 
 def iter_files(root: Path, recursive: bool):
